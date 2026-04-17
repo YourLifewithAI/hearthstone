@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.pnp.*
+
+# Build outputs
+dist/
+build/
+.wrangler/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+.dev.vars
+*.secret
+*.key
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Your actual context (keep .example files though)
+context/*.md
+!context/*.md.example
