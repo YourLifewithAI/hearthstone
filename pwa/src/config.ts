@@ -1,9 +1,8 @@
 /**
- * Runtime config. Build-time env var from .env (see .env.example).
- *
- * API key is stored in localStorage after first setup — not baked into the
- * bundle. On first run, the user pastes it in (see pages/Setup.tsx).
+ * Runtime config + localStorage helpers.
  */
+
+import type { ProviderChoice } from './types';
 
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -14,7 +13,10 @@ if (!API_BASE) {
 }
 
 const KEY_STORAGE = 'hearthstone:api_key';
+const PROVIDER_STORAGE = 'hearthstone:provider';
+const MODEL_STORAGE = 'hearthstone:model';
 
+// ─── API key ─────────────────────────────────────────────────────────────────────
 export function getApiKey(): string | null {
   return localStorage.getItem(KEY_STORAGE);
 }
@@ -25,4 +27,26 @@ export function setApiKey(key: string): void {
 
 export function clearApiKey(): void {
   localStorage.removeItem(KEY_STORAGE);
+}
+
+// ─── Provider preference ────────────────────────────────────────────────────────────
+export function getProviderChoice(): ProviderChoice {
+  const v = localStorage.getItem(PROVIDER_STORAGE);
+  if (v === 'openrouter' || v === 'anthropic' || v === 'local' || v === 'auto') {
+    return v;
+  }
+  return 'auto';
+}
+
+export function setProviderChoice(choice: ProviderChoice): void {
+  localStorage.setItem(PROVIDER_STORAGE, choice);
+}
+
+// ─── Model preference ────────────────────────────────────────────────────────────────
+export function getModelAlias(): string {
+  return localStorage.getItem(MODEL_STORAGE) ?? 'sonnet';
+}
+
+export function setModelAlias(alias: string): void {
+  localStorage.setItem(MODEL_STORAGE, alias);
 }

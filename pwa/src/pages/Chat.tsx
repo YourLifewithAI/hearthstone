@@ -5,10 +5,23 @@ import {
   createConversation,
   updateConversation,
   streamChat,
+  fetchProvidersStatus,
 } from '../api';
-import type { ConversationMessage, ConversationSummary } from '../types';
+import type {
+  ConversationMessage,
+  ConversationSummary,
+  ModelInfo,
+  ProviderChoice,
+  ProvidersResponse,
+} from '../types';
 import { ChatBubble } from '../components/ChatBubble';
 import { relativeTime } from '../lib/time';
+import {
+  getProviderChoice,
+  setProviderChoice,
+  getModelAlias,
+  setModelAlias,
+} from '../config';
 
 export function Chat() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -18,12 +31,19 @@ export function Chat() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+
+  const [provider, setProviderState] = useState<ProviderChoice>(getProviderChoice());
+  const [model, setModelState] = useState<string>(getModelAlias());
+  const [providers, setProviders] = useState<ProvidersResponse | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchConversations()
       .then(setConversations)
       .catch((e) => setError(e.message));
+    fetchProvidersStatus().then(setProviders).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -32,6 +52,16 @@ export function Chat() {
       behavior: 'smooth',
     });
   }, [messages]);
+
+  function chooseProvider(p: ProviderChoice) {
+    setProviderState(p);
+    setProviderChoice(p);
+  }
+
+  function chooseModel(alias: string) {
+    setModelState(alias);
+    setModelAlias(alias);
+  }
 
   async function loadConversation(id: string) {
     try {
@@ -78,6 +108,8 @@ export function Chat() {
       for await (const chunk of streamChat({
         messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
         conversation_id: activeId ?? undefined,
+        provider,
+        model,
       })) {
         acc += chunk;
         setMessages((prev) => {
@@ -106,6 +138,12 @@ export function Chat() {
     }
   }
 
+  const providerLabel =
+    provider === 'auto'
+      ? 'Auto'
+      : providers?.providers.find((p) => p.id === provider)?.label ?? provider;
+  const currentModel = providers?.models.find((m) => m.alias === model);
+
   return (
     <div className="flex flex-col h-[100svh] pb-16">
       {/* Header */}
@@ -117,9 +155,15 @@ export function Chat() {
         >
           ☰ {showList ? 'Close' : 'History'}
         </button>
-        <h1 className="text-sm font-medium text-slate-100">
-          {activeId ? 'Conversation' : 'New chat'}
-        </h1>
+        <button
+          type="button"
+          onClick={() => setShowPicker((v) => !v)}
+          className="text-xs text-slate-400 flex items-center gap-1"
+        >
+          <span className="text-slate-200">{currentModel?.label ?? model}</span>
+          <span className="text-slate-500">· {providerLabel}</span>
+          <span>▾</span>
+        </button>
         <button
           type="button"
           onClick={startNew}
@@ -129,6 +173,53 @@ export function Chat() {
         </button>
       </div>
 
+      {/* Model/provider picker */}
+      {showPicker && (
+        <div className="absolute inset-x-0 top-[49px] z-30 bg-slate-900 border-b border-slate-800 p-4 space-y-4">
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Provider</h3>
+            <div className="flex flex-wrap gap-2">
+              <ProviderChip
+                id="auto"
+                label="Auto"
+                active={provider === 'auto'}
+                healthy
+                onClick={() => chooseProvider('auto')}
+              />
+              {providers?.providers.map((p) => (
+                <ProviderChip
+                  key={p.id}
+                  id={p.id}
+                  label={p.label}
+                  active={provider === p.id}
+                  healthy={p.healthy}
+                  configured={p.configured}
+                  onClick={() => chooseProvider(p.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Model</h3>
+            <div className="flex flex-wrap gap-2">
+              {providers?.models.map((m) => (
+                <ModelChip
+                  key={m.alias}
+                  model={m}
+                  active={model === m.alias}
+                  onClick={() => {
+                    chooseModel(m.alias);
+                    setShowPicker(false);
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History drawer */}
       {showList && (
         <div className="absolute inset-x-0 top-[49px] bottom-16 z-20 bg-slate-900 overflow-y-auto">
           <ul className="divide-y divide-slate-800">
@@ -205,5 +296,54 @@ export function Chat() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ProviderChip(props: {
+  id: string;
+  label: string;
+  active: boolean;
+  healthy: boolean;
+  configured?: boolean;
+  onClick: () => void;
+}) {
+  const { label, active, healthy, configured = true, onClick } = props;
+  const dotColor = !configured
+    ? 'bg-slate-600'
+    : healthy
+      ? 'bg-green-400'
+      : 'bg-slate-600';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!configured}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${
+        active
+          ? 'bg-purple-900/60 border-purple-600 text-purple-100'
+          : 'bg-slate-800 border-slate-700 text-slate-300'
+      } ${!configured ? 'opacity-40' : 'active:bg-slate-700'}`}
+    >
+      <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+      {label}
+    </button>
+  );
+}
+
+function ModelChip(props: { model: ModelInfo; active: boolean; onClick: () => void }) {
+  const { model, active, onClick } = props;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-left border ${
+        active
+          ? 'bg-purple-900/60 border-purple-600 text-purple-100'
+          : 'bg-slate-800 border-slate-700 text-slate-300 active:bg-slate-700'
+      }`}
+    >
+      <span className="text-xs font-medium">{model.label}</span>
+      {model.note && <span className="text-[10px] text-slate-400">{model.note}</span>}
+    </button>
   );
 }

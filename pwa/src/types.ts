@@ -29,3 +29,29 @@ export interface SnapshotMeta {
 export interface ContextStatus {
   meta: SnapshotMeta | null;
 }
+
+// ─── Providers ─────────────────────────────────────────────────────────────────
+
+export type ProviderId = 'openrouter' | 'anthropic' | 'local';
+export type ProviderChoice = ProviderId | 'auto';
+
+export interface ProviderStatus {
+  id: ProviderId;
+  label: string;
+  configured: boolean;
+  healthy: boolean;
+  detail?: string;
+  checked_at?: number;
+}
+
+export interface ModelInfo {
+  alias: string;
+  label: string;
+  note?: string;
+  available_on: string[];
+}
+
+export interface ProvidersResponse {
+  providers: ProviderStatus[];
+  models: ModelInfo[];
+}

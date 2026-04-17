@@ -1,5 +1,6 @@
 /**
  * Typed fetch wrappers for the Hearthstone Worker API.
+ * Handles both Anthropic-native and OpenAI-compatible SSE formats.
  */
 
 import { API_BASE, getApiKey } from './config';
@@ -8,6 +9,8 @@ import type {
   ConversationSummary,
   ConversationMessage,
   ContextStatus,
+  ProvidersResponse,
+  ProviderChoice,
 } from './types';
 import { cacheState, readCachedState } from './db';
 
@@ -38,7 +41,7 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
   return res;
 }
 
-// ─── Context status ────────────────────────────────────────────────────────────
+// ─── Context status ──────────────────────────────────────────────────────────────
 export async function fetchContextStatus(): Promise<ContextStatus> {
   try {
     const res = await apiFetch('/context/status');
@@ -50,6 +53,15 @@ export async function fetchContextStatus(): Promise<ContextStatus> {
     if (cached) return cached;
     throw err;
   }
+}
+
+// ─── Providers ─────────────────────────────────────────────────────────────────
+export async function fetchProvidersStatus(options: { refresh?: boolean } = {}): Promise<ProvidersResponse> {
+  const path = options.refresh ? '/providers/refresh' : '/providers/status';
+  const res = await apiFetch(path, options.refresh ? { method: 'POST' } : {});
+  const data = (await res.json()) as ProvidersResponse;
+  await cacheState('providers', data);
+  return data;
 }
 
 // ─── Conversations ──────────────────────────────────────────────────────────────
@@ -93,7 +105,8 @@ export async function updateConversation(
 export interface ChatRequest {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   conversation_id?: string;
-  model?: 'sonnet' | 'haiku' | 'opus';
+  provider?: ProviderChoice;
+  model?: string;
 }
 
 export async function* streamChat(req: ChatRequest): AsyncGenerator<string> {
@@ -111,7 +124,7 @@ export async function* streamChat(req: ChatRequest): AsyncGenerator<string> {
 
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(res.status, text.slice(0, 200));
+    throw new ApiError(res.status, text.slice(0, 300));
   }
 
   const reader = res.body.getReader();
@@ -148,10 +161,23 @@ function parseSSEEvent(event: string): string | null {
   }
   if (!dataLine) return null;
 
+  // End-of-stream sentinel used by OpenAI-compatible providers (OpenRouter, etc.)
+  if (dataLine === '[DONE]') return null;
+
   try {
     const data = JSON.parse(dataLine);
+
+    // Anthropic-native format
     if (data.type === 'content_block_delta' && data.delta?.type === 'text_delta') {
       return data.delta.text as string;
+    }
+
+    // OpenAI-compatible format (OpenRouter, local relays using OAI schema)
+    if (Array.isArray(data.choices) && data.choices.length > 0) {
+      const delta = data.choices[0].delta;
+      if (delta?.content && typeof delta.content === 'string') {
+        return delta.content;
+      }
     }
   } catch {
     // malformed event — ignore
