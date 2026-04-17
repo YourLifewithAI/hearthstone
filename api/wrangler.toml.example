@@ -1,0 +1,23 @@
+# Copy this file to wrangler.toml, then fill in the placeholders.
+# See BUILD.md for the step-by-step.
+
+name = "hearthstone-api"              # Change to anything unique to you
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+# The URL of your deployed PWA. Used for CORS.
+# After you deploy Pages, update this and redeploy the Worker.
+PAGES_ORIGIN = "https://YOUR-PWA-URL.pages.dev"
+
+[[kv_namespaces]]
+binding = "HEARTHSTONE_KV"
+# Create with: npx wrangler kv namespace create HEARTHSTONE_KV
+# Then paste the returned ID below.
+id = "PASTE_KV_NAMESPACE_ID_HERE"
+
+# Secrets are set via `wrangler secret put` — never commit them:
+#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put HEARTHSTONE_API_KEY
