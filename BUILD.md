@@ -2,7 +2,7 @@
 
 *Phase 0 — deploy your own personal Claude PWA from this repo.*
 
-Estimated time: **2–3 hours** (most of which is account signup + waiting for deploys). Skill level: comfortable pasting commands. You don't need to be a developer.
+Estimated time: **2–3 hours** (most of which is account signup + waiting for deploys).
 
 ---
 
@@ -27,8 +27,11 @@ Estimated time: **2–3 hours** (most of which is account signup + waiting for d
 
 | Service | Purpose | Cost |
 |---------|---------|------|
-| [Cloudflare](https://dash.cloudflare.com/sign-up) | Hosts the Worker (backend) and the PWA (frontend), plus KV storage | Free tier is plenty |
-| [Anthropic Console](https://console.anthropic.com/) | Your Claude API access | Pay per token, ~$5 buys you a LOT of casual use |
+| [Cloudflare](https://dash.cloudflare.com/sign-up) | Hosts the Worker, the PWA, and the KV store | Free tier is plenty |
+| [OpenRouter](https://openrouter.ai/) | **Recommended default provider.** One API, 300+ models. | Pay per token, ~5% markup over direct provider rates (BYOK to skip the markup) |
+| [Anthropic Console](https://console.anthropic.com/) | Optional. Only if you want to use Anthropic directly instead of (or in addition to) OpenRouter. | Pay per token |
+
+You don't need all three accounts to get started — you only need one provider configured. **OpenRouter is the easiest** because you can experiment with Claude, GPT, Gemini, Llama, and DeepSeek from a single key.
 
 ### Local software
 
@@ -39,31 +42,19 @@ Estimated time: **2–3 hours** (most of which is account signup + waiting for d
 | **A code editor** | Edit config + context files | [VS Code](https://code.visualstudio.com/) is fine |
 | **A terminal** | Run commands | macOS: Terminal. Windows: [Windows Terminal](https://apps.microsoft.com/detail/9n0dx20hk701) or PowerShell. Linux: whatever you have. |
 
-### Libraries used (auto-installed by npm)
+### Libraries (auto-installed by npm)
 
-Not something you install yourself — included here so you know what's running:
+**Worker:** [TypeScript](https://www.typescriptlang.org/), [Hono](https://hono.dev/), [Zod](https://zod.dev/), [Wrangler](https://developers.cloudflare.com/workers/wrangler/).
 
-**Worker stack:**
-- [**TypeScript**](https://www.typescriptlang.org/) — typed JavaScript
-- [**Hono**](https://hono.dev/) — fast web framework for Cloudflare Workers
-- [**Zod**](https://zod.dev/) — runtime schema validation
-- [**Wrangler**](https://developers.cloudflare.com/workers/wrangler/) — Cloudflare's deployment CLI
-
-**PWA stack:**
-- [**React 19**](https://react.dev/) — UI framework
-- [**Vite 7**](https://vite.dev/) — build tool + dev server
-- [**Tailwind CSS 4**](https://tailwindcss.com/) — utility-first styling
-- [**vite-plugin-pwa**](https://vite-pwa-org.netlify.app/) — service worker + manifest generation
-- [**Workbox**](https://developers.google.com/web/tools/workbox) — caching strategy for the service worker (via vite-plugin-pwa)
-- [**Dexie.js**](https://dexie.org/) — IndexedDB wrapper for offline storage
-- [**React Router 7**](https://reactrouter.com/) — navigation
+**PWA:** [React 19](https://react.dev/), [Vite 7](https://vite.dev/), [Tailwind CSS 4](https://tailwindcss.com/), [vite-plugin-pwa](https://vite-pwa-org.netlify.app/), [Workbox](https://developers.google.com/web/tools/workbox), [Dexie.js](https://dexie.org/), [React Router 7](https://reactrouter.com/).
 
 ### APIs used
 
-- [Cloudflare Workers](https://developers.cloudflare.com/workers/) — serverless compute at the edge
+- [Cloudflare Workers](https://developers.cloudflare.com/workers/) — serverless compute
 - [Cloudflare Pages](https://developers.cloudflare.com/pages/) — static site hosting
 - [Cloudflare KV](https://developers.cloudflare.com/kv/) — key-value storage
-- [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) — Claude's chat endpoint (streaming SSE)
+- [OpenRouter API](https://openrouter.ai/docs) — LLM gateway (OpenAI-compatible)
+- [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) — optional direct-Anthropic path
 
 ---
 
@@ -113,15 +104,22 @@ If this is your first Cloudflare Worker, open [dash.cloudflare.com](https://dash
 npx wrangler kv namespace create HEARTHSTONE_KV
 ```
 
-It prints an ID like `id = "abc123..."`. Open `wrangler.toml` and paste that ID where it says `PASTE_KV_NAMESPACE_ID_HERE`.
+It prints an ID. Paste it into `wrangler.toml` where it says `PASTE_KV_NAMESPACE_ID_HERE`.
 
-### 3.4 Create your Anthropic API key
+### 3.4 Get your provider API key(s)
 
-Go to [console.anthropic.com](https://console.anthropic.com/) → Settings → API keys → **Create key**. Name it "Hearthstone." Copy the key (shown only once).
+**OpenRouter (recommended):**
+1. Visit [openrouter.ai](https://openrouter.ai/) → Sign in → Keys → **Create Key**.
+2. Copy the key (`sk-or-v1-...`). Save in your password manager.
+3. (Highly recommended) Visit [openrouter.ai/settings/integrations](https://openrouter.ai/settings/integrations) and add your own Anthropic/OpenAI/etc. keys. Now OpenRouter will route through **your** keys at zero markup. See [ADAPTERS.md](./ADAPTERS.md#recommended-setup-openrouter--byok).
+
+**Anthropic Direct (optional):**
+1. Visit [console.anthropic.com](https://console.anthropic.com/) → API keys → **Create key**.
+2. Copy the key (`sk-ant-api03-...`). Save in your password manager.
 
 ### 3.5 Create your Hearthstone bearer token
 
-This is the password the PWA uses to talk to the Worker. Generate any random 64-char hex string.
+This is the password the PWA uses to talk to the Worker. Generate a random 64-char hex string.
 
 **macOS/Linux:**
 ```bash
@@ -135,29 +133,31 @@ $bytes = New-Object byte[] 32
 [BitConverter]::ToString($bytes) -replace '-', ''
 ```
 
-**Save both keys in your password manager.** You'll need them again.
+**Save this in your password manager too.**
 
 ### 3.6 Set the Worker secrets
 
-Copy your **Anthropic key** to clipboard, then:
-
-```bash
-# macOS/Linux:
-pbpaste | npx wrangler secret put ANTHROPIC_API_KEY
-
-# Windows PowerShell:
-Get-Clipboard | npx wrangler secret put ANTHROPIC_API_KEY
-```
-
-Copy your **Hearthstone bearer token** to clipboard, then:
+Copy each secret to clipboard, then pipe to wrangler:
 
 ```bash
 # macOS/Linux:
 pbpaste | npx wrangler secret put HEARTHSTONE_API_KEY
+pbpaste | npx wrangler secret put OPENROUTER_API_KEY
+# Optional extras:
+pbpaste | npx wrangler secret put ANTHROPIC_API_KEY
+pbpaste | npx wrangler secret put LOCAL_RELAY_URL
+pbpaste | npx wrangler secret put LOCAL_RELAY_TOKEN
 
 # Windows PowerShell:
 Get-Clipboard | npx wrangler secret put HEARTHSTONE_API_KEY
+Get-Clipboard | npx wrangler secret put OPENROUTER_API_KEY
+# Optional:
+Get-Clipboard | npx wrangler secret put ANTHROPIC_API_KEY
+Get-Clipboard | npx wrangler secret put LOCAL_RELAY_URL
+Get-Clipboard | npx wrangler secret put LOCAL_RELAY_TOKEN
 ```
+
+At minimum: `HEARTHSTONE_API_KEY` + one provider. The rest are optional and can be added later.
 
 ### 3.7 Deploy
 
@@ -165,16 +165,15 @@ Get-Clipboard | npx wrangler secret put HEARTHSTONE_API_KEY
 npx wrangler deploy
 ```
 
-Look for a line like:
+Look for:
 ```
   https://hearthstone-api.yourname.workers.dev
 ```
 
-That's your Worker URL. Save it. Test:
-
+Test:
 ```bash
 curl https://hearthstone-api.yourname.workers.dev/health
-# → {"status":"ok","service":"hearthstone-api","version":"0.1.0"}
+# → {"status":"ok","service":"hearthstone-api","version":"0.2.0"}
 ```
 
 🎉 **Backend is live.**
@@ -195,19 +194,15 @@ Edit `.env`:
 VITE_API_BASE=https://hearthstone-api.yourname.workers.dev
 ```
 
-(Use your actual Worker URL from step 3.7.)
-
 ### 4.1 Add app icons
 
-Create two PNGs: `public/icon-192.png` (192×192) and `public/icon-512.png` (512×512). Any square image works. Quick option: [realfavicongenerator.net](https://realfavicongenerator.net/) generates a full set from any uploaded image.
+Create two PNGs: `public/icon-192.png` (192×192) and `public/icon-512.png` (512×512). [realfavicongenerator.net](https://realfavicongenerator.net/) generates both from any uploaded image.
 
 ### 4.2 Build
 
 ```bash
 npm run build
 ```
-
-Should produce a `dist/` folder with no errors.
 
 ### 4.3 Create Cloudflare Pages project
 
@@ -239,7 +234,7 @@ cd ../pwa
 npx wrangler pages deploy dist --project-name=hearthstone --branch=main
 ```
 
-🎉 **Frontend is live** at the Pages URL.
+🎉 **Frontend is live.**
 
 ---
 
@@ -253,15 +248,15 @@ cp context/style.md.example context/style.md
 cp context/notes.md.example context/notes.md
 ```
 
-Open each in your editor and **replace the template content with your own.** The `.example` files have guiding prompts. Take 20–30 minutes on this — this is the most important step, and it shapes every conversation you'll have.
+Open each in your editor and **replace the template content with your own.** The `.example` files have guiding prompts. Take 20–30 minutes on this — it shapes every conversation you'll have.
 
-The real `.md` files are gitignored so you don't accidentally commit your personal context.
+The real `.md` files are gitignored so you don't accidentally commit personal context.
 
 ---
 
 ## 6. Upload context + first test
 
-Set two env vars (paste your real values):
+Set env vars:
 
 **macOS/Linux:**
 ```bash
@@ -288,26 +283,15 @@ chmod +x scripts/snapshot.sh
 .\scripts\snapshot.ps1
 ```
 
-Expected output:
-```
-  about        1234 chars  ./context/about.md
-  projects     2345 chars  ./context/projects.md
-  style         567 chars  ./context/style.md
-  notes         890 chars  ./context/notes.md
-
-Snapshotting 4 files (5036 total chars)...
-
-Snapshot complete.
-  Written:   about, projects, style, notes
-  Version:   1
-  Timestamp: ...
-```
-
 ### Test in the browser
 
-Open your Pages URL. Paste your HEARTHSTONE_API_KEY. Tap **Chat**. Send: "What do you know about me?"
+Open your Pages URL. Paste your HEARTHSTONE_API_KEY.
 
-If Claude's response references your context, **Phase 0 is done.**
+Go to **Settings**. You should see your providers listed with a green dot next to each configured one (OpenRouter, Anthropic Direct, or both). The **BYOK tip** banner explains how to reduce costs — take a minute to read it and configure BYOK in your OpenRouter dashboard if you haven't yet.
+
+Go to **Chat**. The model picker in the header lets you switch models. Send: "What do you know about me?"
+
+If Claude (or whichever model) references your context, **Phase 0 is done.**
 
 ---
 
@@ -316,9 +300,10 @@ If Claude's response references your context, **Phase 0 is done.**
 1. Open your Pages URL in **Safari** (iOS) or **Chrome** (Android).
 2. **iOS:** Tap Share → Add to Home Screen.
    **Android:** Tap menu → Install app.
-3. Open from home screen. Launches standalone.
+3. Open from home screen — launches standalone.
 4. Paste your `HEARTHSTONE_API_KEY` when prompted.
-5. Chat.
+5. Settings → verify providers show green dots.
+6. Chat.
 
 ---
 
@@ -328,23 +313,23 @@ If Claude's response references your context, **Phase 0 is done.**
 
 Any time your `context/*.md` files change, re-run the snapshot script. Takes 2 seconds. No redeploy needed.
 
-Consider scheduling it daily:
+Schedule it daily: see crontab / Task Scheduler examples in the Troubleshooting section.
 
-- **macOS/Linux:** `crontab -e`:
-  ```
-  0 7 * * * HEARTHSTONE_API_KEY="..." HEARTHSTONE_API_URL="..." /path/to/hearthstone/scripts/snapshot.sh
-  ```
-- **Windows:** [Task Scheduler](https://learn.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-start-page) running `powershell.exe -File snapshot.ps1`.
+### Switching providers on the fly
 
-### Rotating keys
+The model picker in the Chat header lets you switch mid-conversation. Settings → Providers lets you change your default (or pick Auto).
 
-If your bearer token leaks, generate a new one and run:
+### Rotating the Hearthstone bearer token
 
 ```bash
-echo "new-token-here" | npx wrangler secret put HEARTHSTONE_API_KEY
+echo "new-64-char-hex" | npx wrangler secret put HEARTHSTONE_API_KEY
 ```
 
-Then in the PWA → Settings → Replace key → paste new one.
+Then in the PWA → Settings → Replace key.
+
+### Running a Local Relay
+
+See [ADAPTERS.md](./ADAPTERS.md#local-relay-bring-your-own-backend). Short version: stand up Ollama, LiteLLM, or a custom endpoint; expose it via Cloudflare Tunnel; set `LOCAL_RELAY_URL` on the Worker. Green dot appears when it's reachable.
 
 ---
 
@@ -352,27 +337,32 @@ Then in the PWA → Settings → Replace key → paste new one.
 
 ### "Unauthorized" when sending a chat
 
-- The key stored in the PWA doesn't match the Worker's. Settings → check key length (should be 64). If not, re-paste.
-- Old service worker caching a stale bundle. Settings → "Clear cache + service worker + reload."
+- Key in PWA doesn't match Worker's. Settings → check key length (should be 64). Re-paste if not.
+- Stale service worker. Settings → "Clear cache + service worker + reload."
 
 ### "Failed to fetch" / "Load failed"
 
-- PWA is hitting the wrong Worker URL. Check `pwa/.env` has the right `VITE_API_BASE` and rebuild.
-- CORS misconfigured. In `api/wrangler.toml`, `PAGES_ORIGIN` must exactly match your Pages URL (no trailing slash). Redeploy the Worker after any change.
+- PWA hitting wrong Worker URL. Check `pwa/.env` has the right `VITE_API_BASE` and rebuild.
+- CORS. `PAGES_ORIGIN` in `api/wrangler.toml` must match your Pages URL exactly. Redeploy Worker after any change.
 
-### Worker deployed but "Page not found" at the workers.dev URL
+### Worker deployed but "Page not found"
 
-- You need to register a workers.dev subdomain once per account (see step 3.2).
-- Make sure `workers_dev = true` is in `wrangler.toml`.
+- Register a workers.dev subdomain (step 3.2).
+- `workers_dev = true` must be in `wrangler.toml`.
+
+### All providers show gray dots
+
+- None of the provider secrets are configured, or they're wrong. Run `wrangler secret list` inside `api/` to see what's set.
+- For OpenRouter, verify your key at [openrouter.ai/keys](https://openrouter.ai/keys).
 
 ### Chat works but response doesn't use context
 
 - Run the snapshot script. Check `/context/status` returns non-null `meta`.
-- Your context files might be empty. Open them and verify.
+- Context files might be empty. Open them and verify.
 
 ### Snapshot script fails with JSON validation error
 
-- The provided scripts handle PowerShell's JSON-wrapping quirk and UTF-8 BOM stripping. If you're running a modified version, make sure you're reading raw bytes + decoding UTF8 + stripping BOM.
+- The shipped scripts handle PowerShell's JSON-wrapping quirk and UTF-8 BOM stripping. If you modified them, make sure you're reading raw bytes, decoding UTF8, and stripping BOM.
 
 ### PWA won't install on iOS
 
@@ -380,11 +370,12 @@ Then in the PWA → Settings → Replace key → paste new one.
 - Manifest needs 192 and 512 icons.
 - Try a hard reload first.
 
-### Anthropic errors
+### Provider-specific errors
 
-- `401`: Anthropic key wrong. Re-run `wrangler secret put ANTHROPIC_API_KEY`.
-- `429`: Rate limit. Wait 30 seconds.
-- `400`: Usually too-long context. Trim your files.
+- **401 OpenRouter**: Key wrong, or your OpenRouter account has no credits. Deposit funds at [openrouter.ai/credits](https://openrouter.ai/credits) or use free-tier models.
+- **401 Anthropic**: Key wrong. Re-run `wrangler secret put ANTHROPIC_API_KEY`.
+- **429**: Rate limit. Wait 30 seconds, or switch providers in the model picker.
+- **400**: Usually too-long context. Trim your files.
 
 ### Streaming cuts off
 
@@ -393,8 +384,8 @@ Then in the PWA → Settings → Replace key → paste new one.
 
 ### Cost concerns
 
-- Only Anthropic charges per token. Check [console.anthropic.com](https://console.anthropic.com/) usage dashboard.
-- Set a monthly spending limit in Anthropic settings.
+- OpenRouter: Set a daily/monthly spending limit in your dashboard.
+- Anthropic: Set a monthly spending limit in [console.anthropic.com](https://console.anthropic.com/) → Settings → Limits.
 - Pre-buy credits rather than attaching a card if you want a hard cap.
 
 ---
@@ -409,9 +400,27 @@ Edit `api/src/types.ts`:
 export const CTX_KEYS = ['about', 'projects', 'style', 'notes'] as const;
 ```
 
-Add or remove keys. Update `CTX_TTL` and `CTX_TITLES` in the same file. Then update `scripts/snapshot.ps1` and `scripts/snapshot.sh` to include your new file names.
+Add or remove keys. Update `CTX_TTL` and `CTX_TITLES` in the same file. Update `scripts/snapshot.ps1` and `scripts/snapshot.sh` to include your new file names.
 
-Redeploy the Worker (`npx wrangler deploy` from `api/`).
+Redeploy the Worker.
+
+### Change the default provider
+
+Edit `pwa/src/config.ts`:
+
+```typescript
+export function getProviderChoice(): ProviderChoice {
+  const v = localStorage.getItem(PROVIDER_STORAGE);
+  // ...
+  return 'auto';  // change to 'openrouter', 'anthropic', or 'local'
+}
+```
+
+Rebuild + redeploy PWA.
+
+### Add a new provider
+
+See [ADAPTERS.md](./ADAPTERS.md#adding-a-new-provider). About 50 lines of TypeScript plus an entry in the registry.
 
 ### Change the color theme
 
@@ -421,36 +430,29 @@ Edit `pwa/src/index.css` (Tailwind 4 CSS-first config):
 @theme {
   --color-bg: #your-color;
   --color-accent: #your-color;
-  ...
 }
 ```
 
-### Change the default model
+### Scheduled daily context refresh
 
-Edit `api/src/lib/anthropic.ts`:
-
-```typescript
-const MODEL_ALIASES: Record<string, string> = {
-  sonnet: 'claude-sonnet-4-5',  // or whatever you prefer
-  ...
-};
-```
-
-### Add a scheduled daily context refresh
-
-See the cron example in section 8. Recommended: 4am local time so context is fresh when you wake up.
+- **macOS/Linux:** `crontab -e`:
+  ```
+  0 7 * * * HEARTHSTONE_API_KEY="..." HEARTHSTONE_API_URL="..." /path/to/hearthstone/scripts/snapshot.sh
+  ```
+- **Windows:** Task Scheduler running `powershell.exe -File snapshot.ps1`.
 
 ---
 
 ## What you've built
 
 - A personal Claude that carries your context
+- Multi-provider: switch between OpenRouter, Anthropic, local models at will
 - Installable PWA on any phone
-- No API keys in the browser — secure by default
+- No API keys in the browser
 - Conversations synced across devices
-- ~$0–5/month running cost
-- ~600 lines of TypeScript you can read and modify
+- ~$0–5/month running cost (less if you use free-tier models)
+- Readable codebase you can modify
 
-Read [ROADMAP.md](./ROADMAP.md) for Phase 1+ ideas if you want to keep going.
+Read [ROADMAP.md](./ROADMAP.md) for Phase 1+ ideas. [ADAPTERS.md](./ADAPTERS.md) for deep provider customization.
 
 Have fun.
