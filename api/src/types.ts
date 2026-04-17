@@ -7,26 +7,29 @@
 
 export interface Env {
   HEARTHSTONE_KV: KVNamespace;
-  ANTHROPIC_API_KEY: string;
   HEARTHSTONE_API_KEY: string;
+
+  // Provider credentials (set via `wrangler secret put`).
+  // At least one must be configured for chat to work.
+  ANTHROPIC_API_KEY: string;          // direct Anthropic
+  OPENROUTER_API_KEY: string;         // OpenRouter gateway (recommended default)
+  LOCAL_RELAY_URL: string;            // your own relay server (optional)
+  LOCAL_RELAY_TOKEN: string;          // bearer auth for relay (optional)
+
   PAGES_ORIGIN: string;
 }
 
 // ─── Context keys ─────────────────────────────────────────────────────────────
-// Any short identifier works. These become sections in the system prompt.
-// Add/remove keys to fit your life.
 export const CTX_KEYS = ['about', 'projects', 'style', 'notes'] as const;
 export type CtxKey = typeof CTX_KEYS[number];
 
-// TTL in seconds. Shorter TTLs for files you update often.
 export const CTX_TTL: Record<CtxKey, number> = {
-  about: 2592000,     // 30d
-  projects: 604800,   // 7d
-  style: 2592000,     // 30d
-  notes: 604800,      // 7d
+  about: 2592000,
+  projects: 604800,
+  style: 2592000,
+  notes: 604800,
 };
 
-// Human-readable section titles for the system prompt
 export const CTX_TITLES: Record<CtxKey, string> = {
   about: 'About the user',
   projects: 'Current projects',
@@ -35,7 +38,6 @@ export const CTX_TITLES: Record<CtxKey, string> = {
 };
 
 // ─── Conversation shapes ──────────────────────────────────────────────────────
-
 export interface ConversationSummary {
   id: string;
   title: string;

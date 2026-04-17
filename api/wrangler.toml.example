@@ -18,6 +18,21 @@ binding = "HEARTHSTONE_KV"
 # Then paste the returned ID below.
 id = "PASTE_KV_NAMESPACE_ID_HERE"
 
-# Secrets are set via `wrangler secret put` — never commit them:
-#   wrangler secret put ANTHROPIC_API_KEY
+# ─── Secrets (set via `wrangler secret put`) ───────────────────────────────────────────────────────
+# Required:
+#   HEARTHSTONE_API_KEY       — bearer token the PWA uses to talk to this Worker
+#
+# At least ONE provider credential:
+#   OPENROUTER_API_KEY        — OpenRouter gateway (recommended default, 300+ models)
+#   ANTHROPIC_API_KEY         — direct Anthropic Messages API (if you prefer no gateway)
+#
+# Optional:
+#   LOCAL_RELAY_URL           — https URL of your own relay server (e.g. via Cloudflare Tunnel)
+#   LOCAL_RELAY_TOKEN         — bearer token for your relay (if it requires auth)
+#
+# Example:
 #   wrangler secret put HEARTHSTONE_API_KEY
+#   wrangler secret put OPENROUTER_API_KEY
+#   wrangler secret put ANTHROPIC_API_KEY        # optional
+#   wrangler secret put LOCAL_RELAY_URL          # optional
+#   wrangler secret put LOCAL_RELAY_TOKEN        # optional

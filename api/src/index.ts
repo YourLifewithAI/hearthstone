@@ -3,16 +3,18 @@
  *
  * Routes:
  *   GET  /health                   — liveness (no auth)
+ *   GET  /providers                — provider list with health status
+ *   GET  /providers/status         — alias of /providers
+ *   POST /providers/refresh        — force health re-check
  *   POST /context/snapshot         — batch write context files
  *   GET  /context/status           — last snapshot metadata
  *   GET  /conversations            — list summaries
  *   POST /conversations            — create
  *   GET  /conversations/:id        — full conversation
  *   PUT  /conversations/:id        — replace messages
- *   POST /chat                     — streaming Anthropic proxy
+ *   POST /chat                     — streaming provider proxy
  *
  * Auth: Bearer HEARTHSTONE_API_KEY on all routes except /health.
- * CORS runs before auth so OPTIONS preflight returns clean.
  */
 
 import { Hono } from 'hono';
@@ -22,25 +24,24 @@ import type { Env } from './types';
 import { contextRoutes } from './routes/context';
 import { conversationRoutes } from './routes/conversations';
 import { chatRoutes } from './routes/chat';
+import { providerRoutes } from './routes/providers';
 
 const app = new Hono<{ Bindings: Env }>();
 
-// ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use('*', (c, next) => {
   return cors({
     origin: [c.env.PAGES_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173'],
     allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
+    exposeHeaders: ['X-Hearthstone-Provider', 'X-Hearthstone-Model', 'X-Conversation-Id'],
     maxAge: 600,
   })(c, next);
 });
 
-// ─── Health (no auth) ─────────────────────────────────────────────────────────
 app.get('/health', (c) =>
-  c.json({ status: 'ok', service: 'hearthstone-api', version: '0.1.0' })
+  c.json({ status: 'ok', service: 'hearthstone-api', version: '0.2.0' })
 );
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
 app.use('*', async (c, next) => {
   const header = c.req.header('Authorization');
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
@@ -50,7 +51,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+app.route('/providers', providerRoutes);
 app.route('/context', contextRoutes);
 app.route('/conversations', conversationRoutes);
 app.route('/chat', chatRoutes);
