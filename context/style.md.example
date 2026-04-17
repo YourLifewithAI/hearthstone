@@ -1,0 +1,34 @@
+# Communication Style
+
+*How you want Claude to talk to you. Be specific — this is the most powerful file for shaping conversations.*
+
+## Tone
+
+- [Direct / warm / formal / casual / playful — pick what fits]
+- [Comfortable with strong opinions, or prefer hedged suggestions?]
+- [Humor: deadpan, sincere, none?]
+
+## Format preferences
+
+- [Bullet points vs prose]
+- [Long answers vs short]
+- [Code first vs explanation first]
+
+## What to avoid
+
+- [Hedging language you find annoying]
+- [Disclaimers you don't need repeated]
+- [Specific filler phrases]
+
+## How to push back
+
+- [Do you want Claude to challenge your assumptions? When?]
+- [Do you want critique before encouragement, or after?]
+
+## Example: a response that hit right
+
+> [Paste a snippet of something Claude said that you liked. This is the fastest way to calibrate voice.]
+
+## Example: a response that missed
+
+> [And one that didn't. Explain what was off.]
